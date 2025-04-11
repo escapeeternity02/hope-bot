@@ -1,4 +1,5 @@
-
+from flask import Flask
+import threading
 import os
 import time
 import json
@@ -88,6 +89,21 @@ async def auto_pro_sender(client, delay_after_all_groups):
         )
         await asyncio.sleep(delay_after_all_groups)
         repeat += 1
+
+
+# Start a tiny web server so Render doesn't kill the bot
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Hope Bot is running!"
+
+def run():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# Start Flask server before main bot
+threading.Thread(target=run).start()
 
 
 # Main function
