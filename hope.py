@@ -1,5 +1,3 @@
-from flask import Flask
-import threading
 import os
 import time
 import json
@@ -8,6 +6,7 @@ from telethon import TelegramClient, errors
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
+from aiohttp import web  # 🚀 Added web server
 
 # Initialize colorama for colorful outputs
 init(autoreset=True)
@@ -19,13 +18,24 @@ CREDENTIALS_FOLDER = "sessions"
 if not os.path.exists(CREDENTIALS_FOLDER):
     os.mkdir(CREDENTIALS_FOLDER)
 
-
 # Function to display banner
 def display_banner():
     banner = pyfiglet.figlet_format("ESCAPExETERNITY")
     print(Fore.RED + banner)
     print(Fore.GREEN + Style.BRIGHT + "Made by @EscapeEternity\n")
 
+# 🚀 Minimal web server to keep Render alive
+async def start_web_server():
+    async def handle(request):
+        return web.Response(text="Service is running!")
+
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get("PORT", 10000)))
+    await site.start()
+    print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
 # Function for Auto Pro Sender
 async def auto_pro_sender(client, delay_after_all_groups):
@@ -35,7 +45,7 @@ async def auto_pro_sender(client, delay_after_all_groups):
     try:
         history = await client(
             GetHistoryRequest(
-                peer="me",  # 'me' represents the "Saved Messages" chat
+                peer="me",
                 limit=num_messages,
                 offset_date=None,
                 offset_id=0,
@@ -45,66 +55,32 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 hash=0))
         if history.messages:
             saved_messages = history.messages
-            print(
-                Fore.CYAN +
-                f"{len(saved_messages)} saved messages retrieved for session {session_id}. Forwarding...\n"
-            )
+            print(Fore.CYAN + f"{len(saved_messages)} saved messages retrieved for session {session_id}. Forwarding...\n")
         else:
-            print(
-                Fore.RED +
-                f"No messages found in Saved Messages for session {session_id}."
-            )
+            print(Fore.RED + f"No messages found in Saved Messages for session {session_id}.")
             return
     except Exception as e:
-        print(
-            Fore.RED +
-            f"Failed to retrieve the last saved message for session {session_id}: {e}"
-        )
+        print(Fore.RED + f"Failed to retrieve the last saved message for session {session_id}: {e}")
         return
 
     groups = sorted([d for d in await client.get_dialogs() if d.is_group],
                     key=lambda g: g.name.lower() if g.name else "")
 
     repeat = 1
-    while True:  # Run indefinitely
+    while True:
         print(Fore.CYAN + f"\nStarting repetition {repeat} (Unlimited mode)")
 
         for group in groups:
             for msg in saved_messages:
                 try:
                     await client.forward_messages(group.id, msg.id, "me")
-                    print(
-                        Fore.GREEN +
-                        f"Message sent to group: {group.name or group.id} using session {session_id}"
-                    )
+                    print(Fore.GREEN + f"Message sent to group: {group.name or group.id} using session {session_id}")
                 except Exception as e:
-                    print(
-                        Fore.RED +
-                        f"Error forwarding message to {group.name or group.id}: {e}"
-                    )
+                    print(Fore.RED + f"Error forwarding message to {group.name or group.id}: {e}")
 
-        print(
-            Fore.CYAN +
-            f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds before next round..."
-        )
+        print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds before next round...")
         await asyncio.sleep(delay_after_all_groups)
         repeat += 1
-
-
-# Start a tiny web server so Render doesn't kill the bot
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Hope Bot is running!"
-
-def run():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-# Start Flask server before main bot
-threading.Thread(target=run).start()
-
 
 # Main function
 async def main():
@@ -131,10 +107,13 @@ async def main():
 
     print(Fore.GREEN + "Starting Auto Pro Sender mode with unlimited repetitions and 500s delay.")
 
-    await auto_pro_sender(client, delay_after_all_groups=500)
+    # 🚀 Run both web server and auto sender together
+    await asyncio.gather(
+        start_web_server(),
+        auto_pro_sender(client, delay_after_all_groups=500)
+    )
 
     await client.disconnect()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
