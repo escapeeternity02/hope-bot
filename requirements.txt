@@ -2,3 +2,4 @@ telethon
 colorama
 pyfiglet
 flask
+aiohttp
