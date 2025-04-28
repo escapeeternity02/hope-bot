@@ -2,6 +2,8 @@ import os
 import time
 import json
 import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from telethon import TelegramClient, errors
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
@@ -89,6 +91,19 @@ async def auto_pro_sender(client, delay_after_all_groups):
         repeat += 1
 
 
+# Fake HTTP server to keep Render port open
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
+
+def run_fake_server():
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    server.serve_forever()
+
+
 # Main function
 async def main():
     display_banner()
@@ -120,4 +135,8 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Start the fake server in background
+    threading.Thread(target=run_fake_server).start()
+
+    # Start the bot
     asyncio.run(main())
