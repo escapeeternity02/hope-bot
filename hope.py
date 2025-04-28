@@ -3,6 +3,7 @@ import time
 import json
 import asyncio
 import random
+from datetime import datetime
 from telethon import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
@@ -13,7 +14,7 @@ init(autoreset=True)
 CREDENTIALS_FOLDER = "sessions"
 os.makedirs(CREDENTIALS_FOLDER, exist_ok=True)
 
-# Your Ad Logs group ID
+# Ad Logs group link
 AD_LOGS_LINK = "https://t.me/+nTWD1SFf-NEwNjJl"
 
 def display_banner():
@@ -24,7 +25,8 @@ def display_banner():
 # 🟢 Web server
 async def start_web_server():
     async def handle(request):
-        return web.Response(text="Service is running!")
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        return web.Response(text=f"Service Running: {now}")
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
@@ -32,76 +34,77 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(Fore.YELLOW + f"Web server running on port {port}")
+    print(Fore.YELLOW + f"🌐 Web server running on port {port}")
 
-# Smart Sleep with heartbeat
+# ❤️ Smart Sleep with heartbeat every 30 sec
 async def smart_sleep(total_seconds):
-    interval = 30  # 30 sec heartbeat
+    interval = 30
     elapsed = 0
     while elapsed < total_seconds:
         await asyncio.sleep(min(interval, total_seconds - elapsed))
-        print(Fore.YELLOW + f"❤️ Heartbeat: still alive... ({elapsed}/{total_seconds} sec)")
         elapsed += interval
+        now = datetime.utcnow().strftime("%H:%M:%S")
+        print(Fore.MAGENTA + f"❤️ [{now}] Heartbeat alive... ({elapsed}/{total_seconds} sec)")
 
-# 🚀 Forward messages randomly across 24 hours
-async def auto_pro_sender(client, forwards_count, total_duration_sec):
+# 🚀 Forward saved messages to groups
+async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
 
     try:
         history = await client(GetHistoryRequest("me", limit=5, offset_date=None, offset_id=0, max_id=0, min_id=0, add_offset=0, hash=0))
         saved_messages = history.messages or []
         if len(saved_messages) < 2:
-            print(Fore.RED + f"❌ Need at least 2 messages in Saved Messages.")
+            print(Fore.RED + "❌ Need at least 2 messages in Saved Messages.")
             return
-        print(Fore.CYAN + f"{len(saved_messages)} saved messages retrieved.")
+        print(Fore.CYAN + f"💾 {len(saved_messages)} saved messages retrieved.")
     except Exception as e:
-        print(Fore.RED + f"Error retrieving messages: {e}")
+        print(Fore.RED + f"❌ Error retrieving messages: {e}")
         return
 
-    # Get groups
     try:
         groups = sorted([d for d in await client.get_dialogs() if d.is_group], key=lambda g: g.name.lower() if g.name else "")
         if not groups:
             print(Fore.RED + "❌ No groups found!")
             return
-        print(Fore.GREEN + f"✅ Found {len(groups)} groups.")
+        print(Fore.GREEN + f"✅ {len(groups)} groups found.")
     except Exception as e:
-        print(Fore.RED + f"Error fetching groups: {e}")
+        print(Fore.RED + f"❌ Error fetching groups: {e}")
         return
 
     while True:
         try:
-            print(Fore.CYAN + f"🔄 New round starting...")
-            log_text = f"🔄 New Round Started:\n"
+            now = datetime.utcnow().strftime("%H:%M:%S")
+            print(Fore.CYAN + f"🔄 [{now}] New round starting...")
+            log_lines = [f"🔄 [{now}] New Round Started:\n"]
 
-            # Randomly select saved msg (last 1 or last 2)
             selected_msg = random.choice([saved_messages[-1], saved_messages[-2]])
-            log_text += f"Selected Msg ID: {selected_msg.id}\n\n"
+            log_lines.append(f"📨 Selected Msg ID: {selected_msg.id}\n")
 
             for group in groups:
                 try:
                     await client.forward_messages(group.id, selected_msg.id, "me")
-                    print(Fore.GREEN + f"✅ Sent to group: {group.name or group.id}")
-                    log_text += f"✅ {group.name}\n"
+                    print(Fore.GREEN + f"🟢 Sent to: {group.name or group.id}")
+                    log_lines.append(f"🟢 {group.name}")
                 except Exception as e:
-                    error_msg = f"❌ Error sending to {group.name or group.id}: {str(e)}"
+                    error_msg = f"🔴 Error sending to {group.name or group.id}: {str(e)}"
                     print(Fore.RED + error_msg)
-                    log_text += error_msg + "\n"
+                    log_lines.append(error_msg)
 
-            # Send logs to "Ad Logs" group
-            try:
-                await client.send_message(AD_LOGS_LINK, log_text)
-                print(Fore.GREEN + "✅ Log sent to Ad Logs group.")
-            except Exception as e:
-                print(Fore.RED + f"❌ Error sending log to Ad Logs: {e}")
+            # Send logs to Ad Logs group
+            full_log = "\n".join(log_lines)
+            for i in range(0, len(full_log), 4000):  # Telegram limit safe split
+                await client.send_message(AD_LOGS_LINK, full_log[i:i+4000])
 
-            # Random wait
-            wait_time = random.randint(int(total_duration_sec*0.7)//forwards_count, int(total_duration_sec*1.2)//forwards_count)
-            print(Fore.CYAN + f"⏳ Waiting {wait_time} seconds before next round...")
+            print(Fore.GREEN + "✅ Log sent to Ad Logs group.")
+
+            # Sleep random between 12-26 min
+            wait_time = random.randint(12 * 60, 26 * 60)
+            next_time = (datetime.utcnow() + timedelta(seconds=wait_time)).strftime("%H:%M:%S")
+            print(Fore.CYAN + f"⏳ Waiting {wait_time//60} minutes (until {next_time}) before next round...")
             await smart_sleep(wait_time)
 
         except Exception as e:
-            print(Fore.RED + f"Unexpected error: {e}")
+            print(Fore.RED + f"❗ Unexpected error: {e}")
             await smart_sleep(60)
 
 async def main():
@@ -110,7 +113,7 @@ async def main():
     path = os.path.join(CREDENTIALS_FOLDER, f"{session_name}.json")
 
     if not os.path.exists(path):
-        print(Fore.RED + f"{path} not found. Upload session1.json to 'sessions' folder.")
+        print(Fore.RED + f"❌ {path} not found. Upload session1.json to 'sessions' folder.")
         return
 
     with open(path, "r") as f:
@@ -120,15 +123,15 @@ async def main():
                             credentials["api_id"], credentials["api_hash"])
     await client.start()
 
-    print(Fore.GREEN + "Client authorized. Starting sender + web server...")
+    print(Fore.GREEN + "✅ Client authorized. Starting sender + web server...")
 
     loop = asyncio.get_event_loop()
     loop.create_task(start_web_server())
 
-    await auto_pro_sender(client, forwards_count=100, total_duration_sec=86400)  # 24 hours
+    await auto_pro_sender(client)
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        print(Fore.RED + f"Fatal error: {e}")
+        print(Fore.RED + f"❌ Fatal error: {e}")
