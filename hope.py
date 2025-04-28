@@ -1,10 +1,10 @@
 import os
+import time
 import json
 import asyncio
 import random
 from telethon import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
-from telethon.errors import FloodWaitError
 from colorama import Fore, Style, init
 import pyfiglet
 from aiohttp import web
@@ -13,14 +13,15 @@ init(autoreset=True)
 CREDENTIALS_FOLDER = "sessions"
 os.makedirs(CREDENTIALS_FOLDER, exist_ok=True)
 
-# Link of Ad Logs group
-AD_LOGS_GROUP = "https://t.me/+nTWD1SFf-NEwNjJl"
+# Your Ad Logs group ID
+AD_LOGS_LINK = "https://t.me/+nTWD1SFf-NEwNjJl"
 
 def display_banner():
     banner = pyfiglet.figlet_format("ESCAPExETERNITY")
     print(Fore.RED + banner)
     print(Fore.GREEN + Style.BRIGHT + "Made by @EscapeEternity\n")
 
+# 🟢 Web server
 async def start_web_server():
     async def handle(request):
         return web.Response(text="Service is running!")
@@ -33,85 +34,75 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + f"Web server running on port {port}")
 
-async def auto_sender(client):
+# Smart Sleep with heartbeat
+async def smart_sleep(total_seconds):
+    interval = 30  # 30 sec heartbeat
+    elapsed = 0
+    while elapsed < total_seconds:
+        await asyncio.sleep(min(interval, total_seconds - elapsed))
+        print(Fore.YELLOW + f"❤️ Heartbeat: still alive... ({elapsed}/{total_seconds} sec)")
+        elapsed += interval
+
+# 🚀 Forward messages randomly across 24 hours
+async def auto_pro_sender(client, forwards_count, total_duration_sec):
     session_id = client.session.filename.split('/')[-1]
 
-    # Load last 2 saved messages
     try:
-        history = await client(GetHistoryRequest(
-            peer="me",
-            limit=2,
-            offset_date=None,
-            offset_id=0,
-            max_id=0,
-            min_id=0,
-            add_offset=0,
-            hash=0
-        ))
+        history = await client(GetHistoryRequest("me", limit=5, offset_date=None, offset_id=0, max_id=0, min_id=0, add_offset=0, hash=0))
         saved_messages = history.messages or []
         if len(saved_messages) < 2:
-            print(Fore.RED + f"Need at least 2 saved messages in 'Saved Messages'. Found {len(saved_messages)}.")
+            print(Fore.RED + f"❌ Need at least 2 messages in Saved Messages.")
             return
-        print(Fore.CYAN + "Loaded last 2 messages from Saved Messages.")
+        print(Fore.CYAN + f"{len(saved_messages)} saved messages retrieved.")
     except Exception as e:
         print(Fore.RED + f"Error retrieving messages: {e}")
         return
 
-    # Load all groups
+    # Get groups
     try:
-        groups = [d for d in await client.get_dialogs() if d.is_group]
+        groups = sorted([d for d in await client.get_dialogs() if d.is_group], key=lambda g: g.name.lower() if g.name else "")
         if not groups:
-            print(Fore.RED + "No groups found.")
+            print(Fore.RED + "❌ No groups found!")
             return
-        print(Fore.CYAN + f"Found {len(groups)} groups.")
+        print(Fore.GREEN + f"✅ Found {len(groups)} groups.")
     except Exception as e:
-        print(Fore.RED + f"Error retrieving groups: {e}")
+        print(Fore.RED + f"Error fetching groups: {e}")
         return
 
-    # Load Ad Logs group entity
-    try:
-        ad_logs_entity = await client.get_entity(AD_LOGS_GROUP)
-        print(Fore.GREEN + "Connected to Ad Logs group.")
-    except Exception as e:
-        print(Fore.RED + f"Error finding Ad Logs group: {e}")
-        return
-
-    # Main loop
     while True:
-        selected_msg = random.choice([saved_messages[-1], saved_messages[-2]])
-
-        log_messages = []  # Collect logs here to send after round
-
-        print(Fore.CYAN + f"Sending selected message to all groups...")
-
-        for group in groups:
-            try:
-                await client.forward_messages(entity=group.id, messages=selected_msg.id, from_peer="me")
-                log = f"✅ Sent to: {group.name or group.id}"
-                print(Fore.GREEN + log)
-                log_messages.append(log)
-                await asyncio.sleep(random.uniform(0.5, 1.5))  # FAST sending, little sleep
-            except FloodWaitError as e:
-                wait_time = e.seconds + 5
-                print(Fore.RED + f"FloodWaitError! Sleeping for {wait_time} seconds...")
-                await asyncio.sleep(wait_time)
-            except Exception as e:
-                log = f"❌ Error sending to {group.name or group.id}: {str(e)}"
-                print(Fore.RED + log)
-                log_messages.append(log)
-
-        # After sending to all groups -> send logs to Ad Logs group
-        full_log = "\n".join(log_messages)
         try:
-            await client.send_message(ad_logs_entity, f"📋 **Ad Log Report:**\n\n{full_log}")
-            print(Fore.GREEN + "✅ Logs sent to Ad Logs group.")
-        except Exception as e:
-            print(Fore.RED + f"Error sending logs to Ad Logs group: {e}")
+            print(Fore.CYAN + f"🔄 New round starting...")
+            log_text = f"🔄 New Round Started:\n"
 
-        # Random wait before next round: 10 to 20 minutes
-        wait_seconds = random.randint(600, 1200)
-        print(Fore.CYAN + f"Waiting {wait_seconds // 60} minutes before next round...")
-        await asyncio.sleep(wait_seconds)
+            # Randomly select saved msg (last 1 or last 2)
+            selected_msg = random.choice([saved_messages[-1], saved_messages[-2]])
+            log_text += f"Selected Msg ID: {selected_msg.id}\n\n"
+
+            for group in groups:
+                try:
+                    await client.forward_messages(group.id, selected_msg.id, "me")
+                    print(Fore.GREEN + f"✅ Sent to group: {group.name or group.id}")
+                    log_text += f"✅ {group.name}\n"
+                except Exception as e:
+                    error_msg = f"❌ Error sending to {group.name or group.id}: {str(e)}"
+                    print(Fore.RED + error_msg)
+                    log_text += error_msg + "\n"
+
+            # Send logs to "Ad Logs" group
+            try:
+                await client.send_message(AD_LOGS_LINK, log_text)
+                print(Fore.GREEN + "✅ Log sent to Ad Logs group.")
+            except Exception as e:
+                print(Fore.RED + f"❌ Error sending log to Ad Logs: {e}")
+
+            # Random wait
+            wait_time = random.randint(int(total_duration_sec*0.7)//forwards_count, int(total_duration_sec*1.2)//forwards_count)
+            print(Fore.CYAN + f"⏳ Waiting {wait_time} seconds before next round...")
+            await smart_sleep(wait_time)
+
+        except Exception as e:
+            print(Fore.RED + f"Unexpected error: {e}")
+            await smart_sleep(60)
 
 async def main():
     display_banner()
@@ -133,7 +124,8 @@ async def main():
 
     loop = asyncio.get_event_loop()
     loop.create_task(start_web_server())
-    await auto_sender(client)
+
+    await auto_pro_sender(client, forwards_count=100, total_duration_sec=86400)  # 24 hours
 
 if __name__ == "__main__":
     try:
