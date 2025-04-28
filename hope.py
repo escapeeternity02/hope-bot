@@ -1,41 +1,48 @@
 import os
-import time
 import json
 import asyncio
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from telethon import TelegramClient, errors
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
+from aiohttp import web
 
 # Initialize colorama for colorful outputs
 init(autoreset=True)
 
 # Folder for saving session credentials
 CREDENTIALS_FOLDER = "sessions"
+os.makedirs(CREDENTIALS_FOLDER, exist_ok=True)
 
-# Create the sessions folder if it doesn't exist
-if not os.path.exists(CREDENTIALS_FOLDER):
-    os.mkdir(CREDENTIALS_FOLDER)
-
-
-# Function to display banner
+# Display banner
 def display_banner():
     banner = pyfiglet.figlet_format("ESCAPExETERNITY")
     print(Fore.RED + banner)
     print(Fore.GREEN + Style.BRIGHT + "Made by @EscapeEternity\n")
 
+# Tiny web server to keep Render alive
+async def start_web_server():
+    async def handle(request):
+        return web.Response(text="Service is running!")
 
-# Function for Auto Pro Sender
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get("PORT", 10000)))
+    await site.start()
+    print(Fore.YELLOW + "Web server started to keep Render service alive.")
+
+# The sender function with auto-reconnect
 async def auto_pro_sender(client, delay_after_all_groups):
-    session_id = client.session.filename.split('/')[-1]  # Get session ID
-    num_messages = 1  # Fixed to 1 saved message
+    session_id = client.session.filename.split('/')[-1]
+    num_messages = 1
 
-    try:
-        history = await client(
-            GetHistoryRequest(
-                peer="me",  # 'me' represents the "Saved Messages" chat
+    while True:
+        try:
+            # Get saved messages
+            history = await client(GetHistoryRequest(
+                peer="me",
                 limit=num_messages,
                 offset_date=None,
                 offset_id=0,
@@ -43,68 +50,38 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 min_id=0,
                 add_offset=0,
                 hash=0))
-        if history.messages:
+            if not history.messages:
+                print(Fore.RED + f"No messages found in Saved Messages for session {session_id}.")
+                await asyncio.sleep(60)
+                continue
+
             saved_messages = history.messages
-            print(
-                Fore.CYAN +
-                f"{len(saved_messages)} saved messages retrieved for session {session_id}. Forwarding...\n"
-            )
-        else:
-            print(
-                Fore.RED +
-                f"No messages found in Saved Messages for session {session_id}."
-            )
-            return
-    except Exception as e:
-        print(
-            Fore.RED +
-            f"Failed to retrieve the last saved message for session {session_id}: {e}"
-        )
-        return
+            print(Fore.CYAN + f"{len(saved_messages)} saved messages retrieved for session {session_id}.\n")
 
-    groups = sorted([d for d in await client.get_dialogs() if d.is_group],
-                    key=lambda g: g.name.lower() if g.name else "")
+            groups = sorted([d for d in await client.get_dialogs() if d.is_group],
+                            key=lambda g: g.name.lower() if g.name else "")
 
-    repeat = 1
-    while True:  # Run indefinitely
-        print(Fore.CYAN + f"\nStarting repetition {repeat} (Unlimited mode)")
+            repeat = 1
+            while True:
+                print(Fore.CYAN + f"\nStarting repetition {repeat} (Unlimited mode)")
+                for group in groups:
+                    for msg in saved_messages:
+                        try:
+                            await client.forward_messages(group.id, msg.id, "me")
+                            print(Fore.GREEN + f"Message sent to group: {group.name or group.id}")
+                        except Exception as e:
+                            print(Fore.RED + f"Error forwarding to {group.name or group.id}: {e}")
 
-        for group in groups:
-            for msg in saved_messages:
-                try:
-                    await client.forward_messages(group.id, msg.id, "me")
-                    print(
-                        Fore.GREEN +
-                        f"Message sent to group: {group.name or group.id} using session {session_id}"
-                    )
-                except Exception as e:
-                    print(
-                        Fore.RED +
-                        f"Error forwarding message to {group.name or group.id}: {e}"
-                    )
+                print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds...")
+                await asyncio.sleep(delay_after_all_groups)
+                repeat += 1
 
-        print(
-            Fore.CYAN +
-            f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds before next round..."
-        )
-        await asyncio.sleep(delay_after_all_groups)
-        repeat += 1
+        except Exception as e:
+            print(Fore.RED + f"Error in auto_pro_sender: {e}")
+            print(Fore.YELLOW + "Retrying in 30 seconds...")
+            await asyncio.sleep(30)
 
-
-# Fake HTTP server to keep Render port open
-class SimpleHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b'Bot is running!')
-
-def run_fake_server():
-    port = int(os.environ.get('PORT', 10000))
-    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
-    server.serve_forever()
-
-
-# Main function
+# Main function with auto-reconnect
 async def main():
     display_banner()
 
@@ -118,25 +95,26 @@ async def main():
     with open(path, "r") as f:
         credentials = json.load(f)
 
-    client = TelegramClient(os.path.join(CREDENTIALS_FOLDER, session_name),
-                            credentials["api_id"], credentials["api_hash"])
+    while True:
+        try:
+            client = TelegramClient(os.path.join(CREDENTIALS_FOLDER, session_name),
+                                    credentials["api_id"], credentials["api_hash"])
+            await client.connect()
 
-    await client.connect()
+            if not await client.is_user_authorized():
+                print(Fore.RED + "Session not authorized. Please upload a working session file (.session).")
+                return
 
-    if not await client.is_user_authorized():
-        print(Fore.RED + "Session not authorized. Please upload a working session file (.session).")
-        return
+            print(Fore.GREEN + "Starting Auto Pro Sender mode with unlimited repetitions and 872s delay.")
 
-    print(Fore.GREEN + "Starting Auto Pro Sender mode with unlimited repetitions and 868s delay.")
-
-    await auto_pro_sender(client, delay_after_all_groups=868)
-
-    await client.disconnect()
-
+            await asyncio.gather(
+                start_web_server(),
+                auto_pro_sender(client, delay_after_all_groups=872)
+            )
+        except Exception as e:
+            print(Fore.RED + f"Error in main loop: {e}")
+            print(Fore.YELLOW + "Reconnecting in 30 seconds...")
+            await asyncio.sleep(30)
 
 if __name__ == "__main__":
-    # Start the fake server in background
-    threading.Thread(target=run_fake_server).start()
-
-    # Start the bot
     asyncio.run(main())
