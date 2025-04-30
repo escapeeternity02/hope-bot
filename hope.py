@@ -6,6 +6,7 @@ from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
 from aiohttp import web
+import random
 
 # Initialize colorama for colorful outputs
 init(autoreset=True)
@@ -33,10 +34,11 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# The sender function with auto-reconnect
+# The sender function with anti-ban delay between groups
 async def auto_pro_sender(client, delay_after_all_groups):
     session_id = client.session.filename.split('/')[-1]
     num_messages = 1
+    per_group_delay = 1  # base delay between each group (anti-ban)
 
     while True:
         try:
@@ -69,6 +71,7 @@ async def auto_pro_sender(client, delay_after_all_groups):
                         try:
                             await client.forward_messages(group.id, msg.id, "me")
                             print(Fore.GREEN + f"Message sent to group: {group.name or group.id}")
+                            await asyncio.sleep(per_group_delay + random.uniform(0.3, 0.7))  # anti-ban sleep
                         except Exception as e:
                             print(Fore.RED + f"Error forwarding to {group.name or group.id}: {e}")
 
@@ -105,11 +108,11 @@ async def main():
                 print(Fore.RED + "Session not authorized. Please upload a working session file (.session).")
                 return
 
-            print(Fore.GREEN + "Starting Auto Pro Sender mode with unlimited repetitions and 872s delay.")
+            print(Fore.GREEN + "Starting Auto Pro Sender mode with unlimited repetitions and 1050s delay.")
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=872)
+                auto_pro_sender(client, delay_after_all_groups=1050)
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
