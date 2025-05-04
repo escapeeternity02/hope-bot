@@ -1,7 +1,7 @@
 import os
 import json
 import asyncio
-from telethon import TelegramClient, errors
+from telethon import TelegramClient, events, errors
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
@@ -139,6 +139,16 @@ async def main():
             if not await client.is_user_authorized():
                 print(Fore.RED + "Session not authorized.")
                 return
+
+            # 💬 Auto-reply to DMs
+            @client.on(events.NewMessage(incoming=True))
+            async def handler(event):
+                if event.is_private and not event.out:
+                    try:
+                        await event.reply("This is AdBot Account. If you want anything then contact @EscapeEternity!")
+                        print(Fore.BLUE + f"Auto-replied to {event.sender_id}")
+                    except Exception as e:
+                        print(Fore.RED + f"Failed to reply to {event.sender_id}: {e}")
 
             print(Fore.GREEN + "Starting message sender...")
 
