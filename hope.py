@@ -1,23 +1,27 @@
 import os
 import json
 import asyncio
-from telethon import TelegramClient, events, errors
+import random
+from aiohttp import web
+from telethon import TelegramClient, events
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
-from aiohttp import web
-import random
 
+# Initialize terminal colors
 init(autoreset=True)
 
+# Create sessions folder if not exists
 CREDENTIALS_FOLDER = "sessions"
 os.makedirs(CREDENTIALS_FOLDER, exist_ok=True)
 
+# Display banner
 def display_banner():
     banner = pyfiglet.figlet_format("ESCAPExETERNITY")
     print(Fore.RED + banner)
     print(Fore.GREEN + Style.BRIGHT + "Made by @EscapeEternity\n")
 
+# Keep service alive (for platforms like Render)
 async def start_web_server():
     async def handle(request):
         return web.Response(text="Service is running!")
@@ -30,17 +34,11 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Human-like random messages
+# Casual message pool
 human_messages_pool = [
-    "Hey, how's it going?",
-    "What’s up everyone?",
-    "Anyone active here?",
-    "Just checking in!",
-    "Hope you're all good!",
-    "Hello from the other side!",
-    "Haha, what's happening?",
-    "Good vibes only!",
-    "How are you guys doing?",
+    "Hey, how's it going?", "What’s up everyone?", "Anyone active here?",
+    "Just checking in!", "Hope you're all good!", "Hello from the other side!",
+    "Haha, what's happening?", "Good vibes only!", "How are you guys doing?",
     "Any updates today?"
 ]
 
@@ -52,18 +50,21 @@ def get_random_casual_message(used_messages):
     used_messages.add(msg)
     return msg
 
-async def auto_pro_sender(client, delay_after_all_groups):
+# Core message sender
+async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
-    num_messages = 1
+    used_casuals = set()
+
     min_delay = 30
     max_delay = 60
-
-    used_casuals = set()
+    cooldown_seconds = 45 * 60  # 45 minutes cooldown per group
+    group_last_saved_sent = {}
+    group_last_any_sent = {}
 
     while True:
         try:
             history = await client(GetHistoryRequest(
-                peer="me", limit=num_messages,
+                peer="me", limit=5,
                 offset_date=None, offset_id=0,
                 max_id=0, min_id=0,
                 add_offset=0, hash=0))
@@ -80,36 +81,44 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 key=lambda g: g.name.lower() if g.name else ""
             )
 
-            repeat = 1
-            while True:
-                print(Fore.CYAN + f"\nStarting repetition {repeat}")
-                for group in groups:
-                    try:
-                        if random.randint(1, 100) <= random.randint(10, 15):  # 10–15% chance
+            now = asyncio.get_event_loop().time()
+
+            for group in groups:
+                try:
+                    group_id = group.id
+                    last_saved = group_last_saved_sent.get(group_id, 0)
+                    last_any = group_last_any_sent.get(group_id, 0)
+
+                    # Send saved message every 45 min
+                    if now - last_saved >= cooldown_seconds:
+                        msg = random.choice(saved_messages)
+                        await client.forward_messages(group_id, msg.id, "me")
+                        group_last_saved_sent[group_id] = now
+                        group_last_any_sent[group_id] = now
+                        print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
+
+                    # Optional casual message in between
+                    elif now - last_any >= cooldown_seconds / 2:
+                        if random.randint(1, 100) <= random.randint(15, 25):  # 15–25% chance
                             text = get_random_casual_message(used_casuals)
-                            await client.send_message(group.id, text)
+                            await client.send_message(group_id, text)
+                            group_last_any_sent[group_id] = now
                             print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
-                        else:
-                            msg = saved_messages[0]
-                            await client.forward_messages(group.id, msg.id, "me")
-                            print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
-                        delay = random.uniform(min_delay, max_delay)
-                        print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
-                        await asyncio.sleep(delay)
+                    delay = random.uniform(min_delay, max_delay)
+                    print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
+                    await asyncio.sleep(delay)
 
-                    except Exception as e:
-                        print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
-
-                print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds...")
-                await asyncio.sleep(delay_after_all_groups)
-                repeat += 1
+                except Exception as e:
+                    print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
+                    await asyncio.sleep(5)
 
         except Exception as e:
             print(Fore.RED + f"Error in auto_pro_sender: {e}")
             print(Fore.YELLOW + "Retrying in 30 seconds...")
             await asyncio.sleep(30)
 
+# Main entry point
 async def main():
     display_banner()
 
@@ -140,7 +149,7 @@ async def main():
                 print(Fore.RED + "Session not authorized.")
                 return
 
-            # 💬 Auto-reply to DMs
+            # Auto-reply to incoming DMs
             @client.on(events.NewMessage(incoming=True))
             async def handler(event):
                 if event.is_private and not event.out:
@@ -154,7 +163,7 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=720)  # 12 minutes
+                auto_pro_sender(client)
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
