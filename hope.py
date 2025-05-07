@@ -34,11 +34,27 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
+# Background task: print casual messages every 15–20 mins
+async def casual_behavior():
+    casual_lines = [
+        "Stretching my circuits a bit...",
+        "Still here. Just observing quietly 🤖",
+        "Bots need breaks too... kidding!",
+        "Time flies when you're auto-posting!",
+        "Looking around... all clear 👀",
+        "Hope no one suspects I'm a bot... 😉",
+        "Keeping it casual, staying cool 😎"
+    ]
+    while True:
+        wait_minutes = random.randint(15, 20)
+        await asyncio.sleep(wait_minutes * 60)
+        print(Fore.MAGENTA + "[Casual] " + random.choice(casual_lines))
+
 # Core message sender
 async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
-    min_delay = 5     # Updated from 0 to 5
-    max_delay = 10    # Updated from 5 to 10
+    min_delay = 5
+    max_delay = 10
     cooldown_seconds = 45 * 60  # 45 minutes cooldown per group
     group_last_saved_sent = {}
 
@@ -54,8 +70,8 @@ async def auto_pro_sender(client):
                 await asyncio.sleep(60)
                 continue
 
-            last_msg = history.messages[0]
-            print(Fore.CYAN + "Latest saved message loaded.\n")
+            saved_messages = history.messages
+            print(Fore.CYAN + f"{len(saved_messages)} saved message(s) loaded.\n")
 
             groups = sorted(
                 [d for d in await client.get_dialogs() if d.is_group],
@@ -67,10 +83,11 @@ async def auto_pro_sender(client):
             for group in groups:
                 try:
                     group_id = group.id
-                    last_sent = group_last_saved_sent.get(group_id, 0)
+                    last_saved = group_last_saved_sent.get(group_id, 0)
 
-                    if now - last_sent >= cooldown_seconds:
-                        await client.forward_messages(group_id, last_msg.id, "me")
+                    if now - last_saved >= cooldown_seconds:
+                        msg = saved_messages[0]  # Only the latest saved message
+                        await client.forward_messages(group_id, msg.id, "me")
                         group_last_saved_sent[group_id] = now
                         print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
 
@@ -132,7 +149,8 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client)
+                auto_pro_sender(client),
+                casual_behavior()  # <- Background casual chatter
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
