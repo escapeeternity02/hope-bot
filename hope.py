@@ -37,8 +37,8 @@ async def start_web_server():
 # Core message sender
 async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
-    min_delay = 30
-    max_delay = 60
+    min_delay = 0    # Changed to 0
+    max_delay = 5    # Changed to 5
     cooldown_seconds = 45 * 60  # 45 minutes cooldown per group
     group_last_saved_sent = {}
 
