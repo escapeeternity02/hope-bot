@@ -34,32 +34,13 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Casual message pool
-human_messages_pool = [
-    "Hey, how's it going?", "What’s up everyone?", "Anyone active here?",
-    "Just checking in!", "Hope you're all good!", "Hello from the other side!",
-    "Haha, what's happening?", "Good vibes only!", "How are you guys doing?",
-    "Any updates today?"
-]
-
-def get_random_casual_message(used_messages):
-    if len(used_messages) >= len(human_messages_pool):
-        used_messages.clear()
-    remaining = list(set(human_messages_pool) - used_messages)
-    msg = random.choice(remaining)
-    used_messages.add(msg)
-    return msg
-
 # Core message sender
 async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
-    used_casuals = set()
-
     min_delay = 30
     max_delay = 60
     cooldown_seconds = 45 * 60  # 45 minutes cooldown per group
     group_last_saved_sent = {}
-    group_last_any_sent = {}
 
     while True:
         try:
@@ -87,23 +68,13 @@ async def auto_pro_sender(client):
                 try:
                     group_id = group.id
                     last_saved = group_last_saved_sent.get(group_id, 0)
-                    last_any = group_last_any_sent.get(group_id, 0)
 
-                    # Send saved message every 45 min
+                    # Send saved message every 45 minutes
                     if now - last_saved >= cooldown_seconds:
                         msg = random.choice(saved_messages)
                         await client.forward_messages(group_id, msg.id, "me")
                         group_last_saved_sent[group_id] = now
-                        group_last_any_sent[group_id] = now
                         print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
-
-                    # Optional casual message in between
-                    elif now - last_any >= cooldown_seconds / 2:
-                        if random.randint(1, 100) <= random.randint(15, 25):  # 15–25% chance
-                            text = get_random_casual_message(used_casuals)
-                            await client.send_message(group_id, text)
-                            group_last_any_sent[group_id] = now
-                            print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
 
                     delay = random.uniform(min_delay, max_delay)
                     print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
