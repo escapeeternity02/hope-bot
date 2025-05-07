@@ -37,15 +37,15 @@ async def start_web_server():
 # Core message sender
 async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
-    min_delay = 0    # Changed to 0
-    max_delay = 5    # Changed to 5
+    min_delay = 5     # Updated from 0 to 5
+    max_delay = 10    # Updated from 5 to 10
     cooldown_seconds = 45 * 60  # 45 minutes cooldown per group
     group_last_saved_sent = {}
 
     while True:
         try:
             history = await client(GetHistoryRequest(
-                peer="me", limit=5,
+                peer="me", limit=1,
                 offset_date=None, offset_id=0,
                 max_id=0, min_id=0,
                 add_offset=0, hash=0))
@@ -54,8 +54,8 @@ async def auto_pro_sender(client):
                 await asyncio.sleep(60)
                 continue
 
-            saved_messages = history.messages
-            print(Fore.CYAN + f"{len(saved_messages)} saved message(s) loaded.\n")
+            last_msg = history.messages[0]
+            print(Fore.CYAN + "Latest saved message loaded.\n")
 
             groups = sorted(
                 [d for d in await client.get_dialogs() if d.is_group],
@@ -67,12 +67,10 @@ async def auto_pro_sender(client):
             for group in groups:
                 try:
                     group_id = group.id
-                    last_saved = group_last_saved_sent.get(group_id, 0)
+                    last_sent = group_last_saved_sent.get(group_id, 0)
 
-                    # Send saved message every 45 minutes
-                    if now - last_saved >= cooldown_seconds:
-                        msg = random.choice(saved_messages)
-                        await client.forward_messages(group_id, msg.id, "me")
+                    if now - last_sent >= cooldown_seconds:
+                        await client.forward_messages(group_id, last_msg.id, "me")
                         group_last_saved_sent[group_id] = now
                         print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
 
