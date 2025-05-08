@@ -55,7 +55,7 @@ async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
     min_delay = 5
     max_delay = 10
-    cooldown_range = (70 * 60, 80 * 60)  # 1 hr 10 mins to 1 hr 20 mins
+    cooldown_range = (70 * 60, 80 * 60)  # 70 to 80 minutes in seconds
     group_last_saved_sent = {}
 
     while True:
@@ -87,8 +87,78 @@ async def auto_pro_sender(client):
                     cooldown_seconds = group_last_saved_sent.get(f"{group_id}_cooldown", 0)
 
                     if now - last_sent >= cooldown_seconds:
-    msg = saved_messages[0]
-    await client.forward_messages(group_id, msg.id, "me")
-    group_last_saved_sent[group_id] = now
-    group_last_saved_sent[f"{group_id}_cooldown"] = random.randint(*cooldown_range)
-    print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
+                        msg = saved_messages[0]
+                        await client.forward_messages(group_id, msg.id, "me")
+                        group_last_saved_sent[group_id] = now
+                        group_last_saved_sent[f"{group_id}_cooldown"] = random.randint(*cooldown_range)
+                        print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
+
+                    delay = random.uniform(min_delay, max_delay)
+                    print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
+                    await asyncio.sleep(delay)
+
+                except Exception as e:
+                    print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
+                    await asyncio.sleep(5)
+
+        except Exception as e:
+            print(Fore.RED + f"Error in auto_pro_sender: {e}")
+            print(Fore.YELLOW + "Retrying in 30 seconds...")
+            await asyncio.sleep(30)
+
+# Main entry point
+async def main():
+    display_banner()
+
+    session_name = "session1"
+    path = os.path.join(CREDENTIALS_FOLDER, f"{session_name}.json")
+
+    if not os.path.exists(path):
+        print(Fore.RED + f"Credentials file {path} not found.")
+        return
+
+    with open(path, "r") as f:
+        credentials = json.load(f)
+
+    # Use built-in MTProxy (replace with working proxy if needed)
+    proxy = credentials.get("proxy") or ('185.213.20.244', 443, 'f1ec0625459f73cd22d1895ce895c1df')  # Example proxy
+    proxy_args = (proxy[0], proxy[1], proxy[2]) if proxy else None
+
+    while True:
+        try:
+            client = TelegramClient(
+                os.path.join(CREDENTIALS_FOLDER, session_name),
+                credentials["api_id"],
+                credentials["api_hash"],
+                proxy=("mtproxy", proxy_args[0], proxy_args[1], proxy_args[2])
+            )
+
+            await client.connect()
+            if not await client.is_user_authorized():
+                print(Fore.RED + "Session not authorized.")
+                return
+
+            @client.on(events.NewMessage(incoming=True))
+            async def handler(event):
+                if event.is_private and not event.out:
+                    try:
+                        await event.reply("This is AdBot Account. If you want anything then contact @EscapeEternity!")
+                        print(Fore.BLUE + f"Auto-replied to {event.sender_id}")
+                    except Exception as e:
+                        print(Fore.RED + f"Failed to reply to {event.sender_id}: {e}")
+
+            print(Fore.GREEN + "Starting message sender...")
+
+            await asyncio.gather(
+                start_web_server(),
+                auto_pro_sender(client),
+                casual_behavior()
+            )
+
+        except Exception as e:
+            print(Fore.RED + f"Error in main loop: {e}")
+            print(Fore.YELLOW + "Reconnecting in 30 seconds...")
+            await asyncio.sleep(30)
+
+if __name__ == "__main__":
+    asyncio.run(main())
