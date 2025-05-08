@@ -87,6 +87,8 @@ async def auto_pro_sender(client):
                     cooldown_seconds = group_last_saved_sent.get(f"{group_id}_cooldown", 0)
 
                     if now - last_sent >= cooldown_seconds:
-                        msg = saved_messages[0]
-                        await client.forward_messages(group_id, msg.id, "me")
-                        group_last_saved_sent[group]()_
+    msg = saved_messages[0]
+    await client.forward_messages(group_id, msg.id, "me")
+    group_last_saved_sent[group_id] = now
+    group_last_saved_sent[f"{group_id}_cooldown"] = random.randint(*cooldown_range)
+    print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
