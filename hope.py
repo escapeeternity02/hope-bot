@@ -7,6 +7,7 @@ from telethon import TelegramClient, events
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
+from telethon.network import MTProtoProxy
 
 # Initialize terminal colors
 init(autoreset=True)
@@ -120,9 +121,12 @@ async def main():
     with open(path, "r") as f:
         credentials = json.load(f)
 
-    # Use built-in MTProxy (replace with working proxy if needed)
+    # Use built-in MTProto proxy (replace with your actual proxy details if necessary)
     proxy = credentials.get("proxy") or ('185.213.20.244', 443, 'f1ec0625459f73cd22d1895ce895c1df')  # Example proxy
     proxy_args = (proxy[0], proxy[1], proxy[2]) if proxy else None
+
+    # Create a proxy object to set up the MTProto proxy correctly
+    proxy = MTProtoProxy(host=proxy_args[0], port=proxy_args[1], secret=proxy_args[2])
 
     while True:
         try:
@@ -130,7 +134,7 @@ async def main():
                 os.path.join(CREDENTIALS_FOLDER, session_name),
                 credentials["api_id"],
                 credentials["api_hash"],
-                proxy=("mtproxy", proxy_args[0], proxy_args[1], proxy_args[2])
+                proxy=proxy
             )
 
             await client.connect()
