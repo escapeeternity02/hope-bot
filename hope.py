@@ -1,28 +1,23 @@
 import os
 import json
 import asyncio
-import random
-from aiohttp import web
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, errors
 from telethon.tl.functions.messages import GetHistoryRequest
 from colorama import Fore, Style, init
 import pyfiglet
-from telethon.network import MTProtoProxy
+from aiohttp import web
+import random
 
-# Initialize terminal colors
 init(autoreset=True)
 
-# Create sessions folder if not exists
 CREDENTIALS_FOLDER = "sessions"
 os.makedirs(CREDENTIALS_FOLDER, exist_ok=True)
 
-# Display banner
 def display_banner():
     banner = pyfiglet.figlet_format("ESCAPExETERNITY")
     print(Fore.RED + banner)
     print(Fore.GREEN + Style.BRIGHT + "Made by @EscapeEternity\n")
 
-# Keep service alive (for platforms like Render)
 async def start_web_server():
     async def handle(request):
         return web.Response(text="Service is running!")
@@ -35,34 +30,40 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Background task: print casual messages every 15–20 mins
-async def casual_behavior():
-    casual_lines = [
-        "Stretching my circuits a bit...",
-        "Still here. Just observing quietly 🤖",
-        "Bots need breaks too... kidding!",
-        "Time flies when you're auto-posting!",
-        "Looking around... all clear 👀",
-        "Hope no one suspects I'm a bot... 😉",
-        "Keeping it casual, staying cool 😎"
-    ]
-    while True:
-        wait_minutes = random.randint(15, 20)
-        await asyncio.sleep(wait_minutes * 60)
-        print(Fore.MAGENTA + "[Casual] " + random.choice(casual_lines))
+# Human-like random messages
+human_messages_pool = [
+    "Hey, how's it going?",
+    "What’s up everyone?",
+    "Anyone active here?",
+    "Just checking in!",
+    "Hope you're all good!",
+    "Hello from the other side!",
+    "Haha, what's happening?",
+    "Good vibes only!",
+    "How are you guys doing?",
+    "Any updates today?"
+]
 
-# Core message sender
-async def auto_pro_sender(client):
+def get_random_casual_message(used_messages):
+    if len(used_messages) >= len(human_messages_pool):
+        used_messages.clear()
+    remaining = list(set(human_messages_pool) - used_messages)
+    msg = random.choice(remaining)
+    used_messages.add(msg)
+    return msg
+
+async def auto_pro_sender(client, delay_after_all_groups):
     session_id = client.session.filename.split('/')[-1]
-    min_delay = 5
-    max_delay = 10
-    cooldown_range = (70 * 60, 80 * 60)  # 70 to 80 minutes in seconds
-    group_last_saved_sent = {}
+    num_messages = 1
+    min_delay = 30
+    max_delay = 60
+
+    used_casuals = set()
 
     while True:
         try:
             history = await client(GetHistoryRequest(
-                peer="me", limit=1,
+                peer="me", limit=num_messages,
                 offset_date=None, offset_id=0,
                 max_id=0, min_id=0,
                 add_offset=0, hash=0))
@@ -79,35 +80,36 @@ async def auto_pro_sender(client):
                 key=lambda g: g.name.lower() if g.name else ""
             )
 
-            now = asyncio.get_event_loop().time()
+            repeat = 1
+            while True:
+                print(Fore.CYAN + f"\nStarting repetition {repeat}")
+                for group in groups:
+                    try:
+                        if random.randint(1, 100) <= random.randint(10, 15):  # 10–15% chance
+                            text = get_random_casual_message(used_casuals)
+                            await client.send_message(group.id, text)
+                            print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
+                        else:
+                            msg = saved_messages[0]
+                            await client.forward_messages(group.id, msg.id, "me")
+                            print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
-            for group in groups:
-                try:
-                    group_id = group.id
-                    last_sent = group_last_saved_sent.get(group_id, 0)
-                    cooldown_seconds = group_last_saved_sent.get(f"{group_id}_cooldown", 0)
+                        delay = random.uniform(min_delay, max_delay)
+                        print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
+                        await asyncio.sleep(delay)
 
-                    if now - last_sent >= cooldown_seconds:
-                        msg = saved_messages[0]
-                        await client.forward_messages(group_id, msg.id, "me")
-                        group_last_saved_sent[group_id] = now
-                        group_last_saved_sent[f"{group_id}_cooldown"] = random.randint(*cooldown_range)
-                        print(Fore.GREEN + f"[Saved] Sent to {group.name or group.id}")
+                    except Exception as e:
+                        print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
 
-                    delay = random.uniform(min_delay, max_delay)
-                    print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
-                    await asyncio.sleep(delay)
-
-                except Exception as e:
-                    print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
-                    await asyncio.sleep(5)
+                print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds...")
+                await asyncio.sleep(delay_after_all_groups)
+                repeat += 1
 
         except Exception as e:
             print(Fore.RED + f"Error in auto_pro_sender: {e}")
             print(Fore.YELLOW + "Retrying in 30 seconds...")
             await asyncio.sleep(30)
 
-# Main entry point
 async def main():
     display_banner()
 
@@ -121,12 +123,8 @@ async def main():
     with open(path, "r") as f:
         credentials = json.load(f)
 
-    # Use built-in MTProto proxy (replace with your actual proxy details if necessary)
-    proxy = credentials.get("proxy") or ('185.213.20.244', 443, 'f1ec0625459f73cd22d1895ce895c1df')  # Example proxy
-    proxy_args = (proxy[0], proxy[1], proxy[2]) if proxy else None
-
-    # Create a proxy object to set up the MTProto proxy correctly
-    proxy = MTProtoProxy(host=proxy_args[0], port=proxy_args[1], secret=proxy_args[2])
+    proxy = credentials.get("proxy")
+    proxy_args = tuple(proxy) if proxy else None
 
     while True:
         try:
@@ -134,7 +132,7 @@ async def main():
                 os.path.join(CREDENTIALS_FOLDER, session_name),
                 credentials["api_id"],
                 credentials["api_hash"],
-                proxy=proxy
+                proxy=proxy_args
             )
 
             await client.connect()
@@ -142,6 +140,7 @@ async def main():
                 print(Fore.RED + "Session not authorized.")
                 return
 
+            # 💬 Auto-reply to DMs
             @client.on(events.NewMessage(incoming=True))
             async def handler(event):
                 if event.is_private and not event.out:
@@ -155,10 +154,8 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client),
-                casual_behavior()
+                auto_pro_sender(client, delay_after_all_groups=720)  # 12 minutes
             )
-
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
             print(Fore.YELLOW + "Reconnecting in 30 seconds...")
