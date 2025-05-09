@@ -55,8 +55,8 @@ def get_random_casual_message(used_messages):
 async def auto_pro_sender(client, delay_after_all_groups):
     session_id = client.session.filename.split('/')[-1]
     num_messages = 1
-    min_delay = 30
-    max_delay = 60
+    min_delay = 15
+    max_delay = 38
 
     used_casuals = set()
 
@@ -154,7 +154,7 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=720)  # 12 minutes
+                auto_pro_sender(client, delay_after_all_groups=1080)  # 18 minutes
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
