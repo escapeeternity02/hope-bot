@@ -101,15 +101,18 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 print(Fore.CYAN + f"\nStarting repetition {repeat}")
                 for group in groups:
                     try:
-                        if random.randint(1, 100) <= random.randint(10, 15):  # 10–15% chance
+                        # Always forward the saved message
+                        msg = saved_messages[0]
+                        await client.forward_messages(group.id, msg.id, "me")
+                        print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
+
+                        # Occasionally also send a casual message after forwarding
+                        if random.randint(1, 100) <= random.randint(10, 15):  # ~10–15% chance
                             text = get_random_casual_message(used_casuals)
                             await client.send_message(group.id, text)
                             print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
-                        else:
-                            msg = saved_messages[0]
-                            await client.forward_messages(group.id, msg.id, "me")
-                            print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
+                        # Delay between sending to each group
                         delay = random.uniform(min_delay, max_delay)
                         print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
                         await asyncio.sleep(delay)
