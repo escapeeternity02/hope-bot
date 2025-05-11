@@ -30,27 +30,43 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Human-like random messages
-human_messages_pool = [
-    "Hey, how's it going?",
-    "What’s up everyone?",
-    "Anyone active here?",
-    "Just checking in!",
-    "Hope you're all good!",
-    "Hello from the other side!",
-    "Haha, what's happening?",
-    "Good vibes only!",
-    "How are you guys doing?",
-    "Any updates today?"
+# Enhanced human-like random message generator
+message_templates = [
+    "Hey {name}, how's it {feeling}?",
+    "What’s up {name}?",
+    "Anyone {status} today?",
+    "Just {action}!",
+    "Hope you're all {feeling}!",
+    "Yo {name} 👋",
+    "Haha, what's {topic}?",
+    "Vibes check! 😎",
+    "How's everyone {feeling}?",
+    "Any {news} today?"
 ]
 
+words = {
+    "name": ["everyone", "all", "people", "friends", "fam", "guys"],
+    "feeling": ["going", "rolling", "feeling", "doing"],
+    "status": ["online", "awake", "around", "active"],
+    "action": ["checking in", "dropping by", "saying hey", "here for a bit"],
+    "topic": ["happening", "poppin", "going on", "new"],
+    "news": ["updates", "news", "plans", "messages"]
+}
+
 def get_random_casual_message(used_messages):
-    if len(used_messages) >= len(human_messages_pool):
-        used_messages.clear()
-    remaining = list(set(human_messages_pool) - used_messages)
-    msg = random.choice(remaining)
-    used_messages.add(msg)
-    return msg
+    while True:
+        template = random.choice(message_templates)
+        message = template.format(
+            name=random.choice(words["name"]),
+            feeling=random.choice(words["feeling"]),
+            status=random.choice(words["status"]),
+            action=random.choice(words["action"]),
+            topic=random.choice(words["topic"]),
+            news=random.choice(words["news"])
+        )
+        if message not in used_messages:
+            used_messages.add(message)
+            return message
 
 async def auto_pro_sender(client, delay_after_all_groups):
     session_id = client.session.filename.split('/')[-1]
@@ -97,6 +113,11 @@ async def auto_pro_sender(client, delay_after_all_groups):
                         delay = random.uniform(min_delay, max_delay)
                         print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
                         await asyncio.sleep(delay)
+
+                    except errors.FloodWaitError as e:
+                        wait_time = e.seconds
+                        print(Fore.RED + f"FloodWaitError: Waiting for {wait_time} seconds before continuing...")
+                        await asyncio.sleep(wait_time)
 
                     except Exception as e:
                         print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
@@ -154,7 +175,7 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=1080)  # 18 minutes
+                auto_pro_sender(client, delay_after_all_groups=1800)  # 30 minutes
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
