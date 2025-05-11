@@ -71,8 +71,8 @@ def get_random_casual_message(used_messages):
 async def auto_pro_sender(client, delay_after_all_groups):
     session_id = client.session.filename.split('/')[-1]
     num_messages = 1
-    min_delay = 15
-    max_delay = 38
+    min_delay = 4  # Minimum delay set to 4 seconds
+    max_delay = 8  # Maximum delay set to 8 seconds
 
     used_casuals = set()
 
@@ -101,18 +101,18 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 print(Fore.CYAN + f"\nStarting repetition {repeat}")
                 for group in groups:
                     try:
-                        # Always forward the saved message
+                        # Forward the saved message to each group
                         msg = saved_messages[0]
                         await client.forward_messages(group.id, msg.id, "me")
                         print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
-                        # Occasionally also send a casual message after forwarding
+                        # Occasionally send a casual message
                         if random.randint(1, 100) <= random.randint(10, 15):  # ~10–15% chance
                             text = get_random_casual_message(used_casuals)
                             await client.send_message(group.id, text)
                             print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
 
-                        # Delay between sending to each group
+                        # Delay between sending messages to each group (adjusted to 4-8 seconds)
                         delay = random.uniform(min_delay, max_delay)
                         print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
                         await asyncio.sleep(delay)
