@@ -30,7 +30,6 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Enhanced human-like random message generator
 message_templates = [
     "Hey {name}, how's it {feeling}?",
     "What’s up {name}?",
@@ -68,12 +67,11 @@ def get_random_casual_message(used_messages):
             used_messages.add(message)
             return message
 
-async def auto_pro_sender(client, delay_after_all_groups):
+async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
     num_messages = 1
-    min_delay = 4  # Minimum delay set to 4 seconds
-    max_delay = 8  # Maximum delay set to 8 seconds
-
+    min_delay = 4
+    max_delay = 8
     used_casuals = set()
 
     while True:
@@ -96,47 +94,35 @@ async def auto_pro_sender(client, delay_after_all_groups):
                 key=lambda g: g.name.lower() if g.name else ""
             )
 
-            repeat = 1
             while True:
-                print(Fore.CYAN + f"\nStarting repetition {repeat}")
+                print(Fore.CYAN + f"\nStarting another round (no delay after full cycle)")
                 for group in groups:
                     try:
-                        # Forward the saved message to each group
                         msg = saved_messages[0]
                         await client.forward_messages(group.id, msg.id, "me")
                         print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
-                        # Occasionally send a casual message
-                        if random.randint(1, 100) <= random.randint(10, 15):  # ~10–15% chance
+                        if random.randint(1, 100) <= random.randint(10, 15):
                             text = get_random_casual_message(used_casuals)
                             await client.send_message(group.id, text)
                             print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
 
-                        # Delay between sending messages to each group (adjusted to 4-8 seconds)
                         delay = random.uniform(min_delay, max_delay)
                         print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
                         await asyncio.sleep(delay)
 
                     except errors.FloodWaitError as e:
-                        wait_time = e.seconds
-                        print(Fore.RED + f"FloodWaitError: Waiting for {wait_time} seconds before continuing...")
-                        await asyncio.sleep(wait_time)
-
+                        print(Fore.RED + f"FloodWaitError: Waiting {e.seconds}s")
+                        await asyncio.sleep(e.seconds)
                     except Exception as e:
                         print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
 
-                print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds...")
-                await asyncio.sleep(delay_after_all_groups)
-                repeat += 1
-
         except Exception as e:
             print(Fore.RED + f"Error in auto_pro_sender: {e}")
-            print(Fore.YELLOW + "Retrying in 30 seconds...")
             await asyncio.sleep(30)
 
 async def main():
     display_banner()
-
     session_name = "session1"
     path = os.path.join(CREDENTIALS_FOLDER, f"{session_name}.json")
 
@@ -164,7 +150,7 @@ async def main():
                 print(Fore.RED + "Session not authorized.")
                 return
 
-            # 💬 Auto-reply to DMs
+            # DM auto-reply
             @client.on(events.NewMessage(incoming=True))
             async def handler(event):
                 if event.is_private and not event.out:
@@ -178,11 +164,10 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=1800)  # 30 minutes
+                auto_pro_sender(client)
             )
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
-            print(Fore.YELLOW + "Reconnecting in 30 seconds...")
             await asyncio.sleep(30)
 
 if __name__ == "__main__":
