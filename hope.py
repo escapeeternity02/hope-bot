@@ -30,7 +30,7 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Human-like messages
+# Human-like casual messages
 human_messages_pool = [
     "Hey, how's it going?",
     "What’s up everyone?",
@@ -52,51 +52,56 @@ def get_random_casual_message(used_messages):
     used_messages.add(msg)
     return msg
 
-async def auto_pro_sender(client, delay_after_all_groups=3600):
+async def auto_pro_sender(client, delay_after_all_groups=2700):  # 45 minutes
     session_id = client.session.filename.split('/')[-1]
     used_casuals = set()
 
-    try:
-        history = await client(GetHistoryRequest(peer="me", limit=1, offset_id=0, offset_date=None,
-                                                 max_id=0, min_id=0, add_offset=0, hash=0))
-        if not history.messages:
-            print(Fore.RED + f"No messages in Saved Messages for {session_id}.")
-            return
-        saved_message = history.messages[0]
-    except Exception as e:
-        print(Fore.RED + f"Error fetching saved message: {e}")
-        return
-
-    groups = sorted(
-        [d for d in await client.get_dialogs() if d.is_group],
-        key=lambda g: g.name.lower() if g.name else ""
-    )
-
     repeat = 1
     while True:
-        print(Fore.CYAN + f"\nStarting repetition {repeat}")
+        try:
+            # Fetch the latest saved message
+            history = await client(GetHistoryRequest(peer="me", limit=1, offset_id=0, offset_date=None,
+                                                     max_id=0, min_id=0, add_offset=0, hash=0))
+            if not history.messages:
+                print(Fore.RED + f"No messages in Saved Messages for {session_id}.")
+                await asyncio.sleep(60)
+                continue
 
-        async def send_to_group(group):
-            try:
-                if random.randint(1, 100) <= random.randint(10, 15):
-                    text = get_random_casual_message(used_casuals)
-                    await client.send_message(group.id, text)
-                    print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
-                else:
-                    await client.forward_messages(group.id, saved_message.id, "me")
-                    print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
+            saved_message = history.messages[0]
 
-                await asyncio.sleep(random.uniform(8, 15))
+            # Fetch all group chats
+            groups = sorted(
+                [d for d in await client.get_dialogs() if d.is_group],
+                key=lambda g: g.name.lower() if g.name else ""
+            )
 
-            except Exception as e:
-                print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
+            print(Fore.CYAN + f"\nStarting repetition {repeat}")
 
-        tasks = [send_to_group(group) for group in groups]
-        await asyncio.gather(*tasks)
+            for group in groups:
+                try:
+                    if random.randint(1, 100) <= random.randint(10, 15):
+                        text = get_random_casual_message(used_casuals)
+                        await client.send_message(group.id, text)
+                        print(Fore.MAGENTA + f"[Casual] Sent '{text}' to {group.name or group.id}")
+                    else:
+                        await client.forward_messages(group.id, saved_message.id, "me")
+                        print(Fore.GREEN + f"Forwarded saved message to: {group.name or group.id}")
 
-        print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds...")
-        await asyncio.sleep(delay_after_all_groups)
-        repeat += 1
+                    delay = random.uniform(8, 15)
+                    print(Fore.YELLOW + f"Waiting {int(delay)}s before next group...")
+                    await asyncio.sleep(delay)
+
+                except Exception as e:
+                    print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
+
+            print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds (45 mins)...")
+            await asyncio.sleep(delay_after_all_groups)
+            repeat += 1
+
+        except Exception as e:
+            print(Fore.RED + f"Error in auto_pro_sender loop: {e}")
+            print(Fore.YELLOW + "Retrying in 30 seconds...")
+            await asyncio.sleep(30)
 
 async def main():
     display_banner()
@@ -128,7 +133,7 @@ async def main():
                 print(Fore.RED + "Session not authorized.")
                 return
 
-            # Auto-reply to DMs
+            # Auto-reply to private messages
             @client.on(events.NewMessage(incoming=True))
             async def handler(event):
                 if event.is_private and not event.out:
@@ -142,8 +147,9 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=3600)
+                auto_pro_sender(client, delay_after_all_groups=2700)
             )
+
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
             print(Fore.YELLOW + "Reconnecting in 30 seconds...")
