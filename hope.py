@@ -106,7 +106,7 @@ async def auto_pro_sender(client, delay_after_all_groups=2700):  # 45 minutes
 async def main():
     display_banner()
 
-    session_name = "himansession"
+    session_name = "session1"
     path = os.path.join(CREDENTIALS_FOLDER, f"{session_name}.json")
 
     if not os.path.exists(path):
