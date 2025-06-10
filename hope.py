@@ -30,7 +30,6 @@ async def start_web_server():
     await site.start()
     print(Fore.YELLOW + "Web server started to keep Render service alive.")
 
-# Human-like casual messages
 human_messages_pool = [
     "Hey, how's it going?",
     "What’s up everyone?",
@@ -52,14 +51,13 @@ def get_random_casual_message(used_messages):
     used_messages.add(msg)
     return msg
 
-async def auto_pro_sender(client, delay_after_all_groups=2700):  # 45 minutes
+async def auto_pro_sender(client, delay_after_all_groups=1020):  # 17 minutes
     session_id = client.session.filename.split('/')[-1]
     used_casuals = set()
-
     repeat = 1
+
     while True:
         try:
-            # Fetch the latest saved message
             history = await client(GetHistoryRequest(peer="me", limit=1, offset_id=0, offset_date=None,
                                                      max_id=0, min_id=0, add_offset=0, hash=0))
             if not history.messages:
@@ -69,7 +67,6 @@ async def auto_pro_sender(client, delay_after_all_groups=2700):  # 45 minutes
 
             saved_message = history.messages[0]
 
-            # Fetch all group chats
             groups = sorted(
                 [d for d in await client.get_dialogs() if d.is_group],
                 key=lambda g: g.name.lower() if g.name else ""
@@ -94,7 +91,7 @@ async def auto_pro_sender(client, delay_after_all_groups=2700):  # 45 minutes
                 except Exception as e:
                     print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
 
-            print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds (45 mins)...")
+            print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds (17 mins)...")
             await asyncio.sleep(delay_after_all_groups)
             repeat += 1
 
@@ -133,7 +130,6 @@ async def main():
                 print(Fore.RED + "Session not authorized.")
                 return
 
-            # Auto-reply to private messages
             @client.on(events.NewMessage(incoming=True))
             async def handler(event):
                 if event.is_private and not event.out:
@@ -147,13 +143,19 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=2700)
+                auto_pro_sender(client, delay_after_all_groups=1020)
             )
 
         except Exception as e:
             print(Fore.RED + f"Error in main loop: {e}")
             print(Fore.YELLOW + "Reconnecting in 30 seconds...")
             await asyncio.sleep(30)
+
+        finally:
+            try:
+                await client.disconnect()
+            except:
+                pass
 
 if __name__ == "__main__":
     asyncio.run(main())
