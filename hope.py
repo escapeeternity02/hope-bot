@@ -51,15 +51,18 @@ def get_random_casual_message(used_messages):
     used_messages.add(msg)
     return msg
 
-async def auto_pro_sender(client, delay_after_all_groups=1020):  # 17 minutes
+async def auto_pro_sender(client):
     session_id = client.session.filename.split('/')[-1]
     used_casuals = set()
     repeat = 1
 
     while True:
         try:
-            history = await client(GetHistoryRequest(peer="me", limit=1, offset_id=0, offset_date=None,
-                                                     max_id=0, min_id=0, add_offset=0, hash=0))
+            history = await client(GetHistoryRequest(
+                peer="me", limit=1, offset_id=0, offset_date=None,
+                max_id=0, min_id=0, add_offset=0, hash=0
+            ))
+
             if not history.messages:
                 print(Fore.RED + f"No messages in Saved Messages for {session_id}.")
                 await asyncio.sleep(60)
@@ -91,8 +94,9 @@ async def auto_pro_sender(client, delay_after_all_groups=1020):  # 17 minutes
                 except Exception as e:
                     print(Fore.RED + f"Error sending to {group.name or group.id}: {e}")
 
-            print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all_groups} seconds (17 mins)...")
-            await asyncio.sleep(delay_after_all_groups)
+            delay_after_all = random.randint(180, 300)
+            print(Fore.CYAN + f"\nCompleted repetition {repeat}. Waiting {delay_after_all} seconds ({delay_after_all//60} min)...")
+            await asyncio.sleep(delay_after_all)
             repeat += 1
 
         except Exception as e:
@@ -143,7 +147,7 @@ async def main():
 
             await asyncio.gather(
                 start_web_server(),
-                auto_pro_sender(client, delay_after_all_groups=1020)
+                auto_pro_sender(client)
             )
 
         except Exception as e:
